@@ -10,7 +10,6 @@ from datetime import datetime, timedelta
 # It then makes a POST request to Microsoft to renew the subscription before the current one expires.
 # The new subscription should last 2 days before expiring. 
 
-# IMPORTANT NOTE: you need to adjust the AWS region in the "ssm" variable to region your VPC and subnets are in. Ex: ssm = boto3.client('ssm', 'us-east-1')
 # IMPORTANT NOTE: requests is no longer a standard Python library in AWS. You will either need to create a zip file or a docker image with the library installed. 
 
 region = os.environ['AWS_REGION']
