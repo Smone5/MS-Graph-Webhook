@@ -1,4 +1,5 @@
 import json
+import os
 import urllib.parse
 import boto3
 
@@ -10,8 +11,8 @@ import boto3
 #   If it doesn't receive a POST or GET request it prints an exception error into the CloudWatch logs. 
 #
 # IMPORTANT NOTE: you need to adjust the AWS region in the "ssm" variable to region your VPC and subnets are in. Ex: ssm = boto3.client('ssm', 'us-east-1')
-
-ssm = boto3.client('ssm', 'us-east-1')
+region = os.environ['AWS_REGION']
+ssm = boto3.client('ssm', region)
 def get_parameters(name):
     response = ssm.get_parameters(Names=[name],WithDecryption=True)
     for parameter in response['Parameters']:
