@@ -24,17 +24,15 @@ def get_parameters(name):
         return parameter['Value']
         
         
-def handler(event, context):
+def lambda_handler(event, context):
+    print(event)
     body = event['Records'][0]['body']
     z = json.loads(body) #if you use this code in a stepwise function, comment out this line. 
-    x = json.loads(z['Message']) #if you use this code in a stepwise function, comment out this line. 
-    print("Event Input")
-    print(event)
-    print()
+    x = z['resourceData'] #if you use this code in a stepwise function, comment out this line. 
 
     secret_client_state = get_parameters(name='MSGraphSecretClientState')
     
-    if event['clientState'] == secret_client_state:
+    if z['clientState'] == secret_client_state:
         print("Entered client secret state")
         print()
 
@@ -42,13 +40,15 @@ def handler(event, context):
         client_id = get_parameters(name='MSGraphClientId')
         access_token = get_parameters(name='MSGraphAccessToken')
         user_id = get_parameters(name='MSGraphUserId')
-        messageId = event['id']
-        transactionId = event['transactionId']
+        messageId = x['id']
+        print(messageId)
+        transactionId = event['Records'][0]['messageId']
         
         #pull data
-        endpoint = 'https://graph.microsoft.com/v1.0/{}/messages/{}?$select=sender,toRecipients,ccRecipients,bccRecipients,subject,uniqueBody,bodyPreview,body,sentDateTime,receivedDateTime,isDraft,isRead,importance,hasAttachments,conversationIndex,conversationId,id'.format(user_id, messageId)
+        endpoint = 'https://graph.microsoft.com/v1.0/users/{}/messages/{}?$select=sender,toRecipients,ccRecipients,bccRecipients,subject,uniqueBody,bodyPreview,body,sentDateTime,receivedDateTime,isDraft,isRead,importance,hasAttachments,conversationIndex,conversationId,id'.format(user_id, messageId)
         header = {'Authorization': 'Bearer ' + access_token, 'Content-Type': "application/json"}
         email_data = requests.get(endpoint, headers=header).json()
+        print(email_data)
         
         # Scrub the conversation index to build a thread variable to know if email is first or not first in thread.
         conversationIndex = str(email_data['conversationIndex'])
@@ -68,7 +68,7 @@ def handler(event, context):
          
         #Email data for DynamoDB.
         dynamodb = boto3.resource('dynamodb')
-        table = dynamodb.Table('MSGraphEmails')
+        table = dynamodb.Table('Emails')
 
         emailData = {
             'guid': str(guid),
