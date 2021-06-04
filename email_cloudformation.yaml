@@ -118,7 +118,7 @@ Parameters:
 
   MainS3Bucket:
     Type: String
-    Description: "The parent (top level, root) S3 bucket name for all environments from Part Four.
+    Description: "The parent (top level, root) S3 bucket name for all environments from Part Four."
 
   #############################
   ## Project Parameters
