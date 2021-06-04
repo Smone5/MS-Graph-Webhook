@@ -1,0 +1,24 @@
+Checklist
+
+Initial Requirements:
+    1. Have a Microsoft 365 Standard Business Account
+    2. Ensure admin access in Azure
+    3. Have a billable AWS account
+    4. Have access to Google Colab
+    5. Have a Github Account
+
+Part One: Get Two HTTPS Domain Names
+    1. Register TWO HTTPS domain names
+    2. Wait 48 hours if new domain names
+
+Part Two: Gather Microsoft Graph Credentials
+    1. Create a new Microsoft Graph App
+    2. Save the App Application (client) ID
+    3. Save the App Directory (tenant) ID
+    4. Create and save Secret Key Value
+
+Part Three: Part Three: Use Microsoft Graph to Get Ids
+    1. 
+Part Four
+Part Five
+Part Six

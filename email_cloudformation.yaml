@@ -1,0 +1,1109 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: Emails Microsoft Graph Webhook
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      -
+        Label:
+          default: Microsoft Graph Required Parameters
+        Parameters:
+          - MsGraphClientId
+          - MSGraphTenantId
+          - MSGraphUserId
+      -
+        Label:
+          default: AWS Required Parameters
+        Parameters:
+          - MainS3Bucket
+          - HostedZoneId
+          - DNSName
+          - SSLCertificateArn
+          - SNSTopic
+          - VPCCidrBlocks
+          - Subnet1Region
+          - Subnet2Region
+          - SubnetPublicCidrBlocks1
+          - SubnetPublicCidrBlocks2
+          - SubnetPrivateCidrBlocks1
+          - SubnetPrivateCidrBlocks2
+            
+      -
+        Label:
+          default: Project Required Parameters
+        Parameters:
+          - EnvironUsed
+      -
+        Label:
+          default: Customizable SQS Parameters
+        Parameters:
+          - DelaySeconds
+          - MaximumMessageSize
+          - MessageRetentionPeriod
+          - ReceiveMessageWaitTimeSeconds
+          - VisibilityTimeout
+         
+Parameters:
+  #############################
+  ## Microsoft Graph Required Parameters
+  #############################
+  MsGraphClientId:
+    Type: String
+    Description: "The Microsoft Graph Application (client) ID from Part Two"
+    NoEcho: True
+
+  MSGraphTenantId:
+    Type: String
+    Description: "The Microsoft Graph Directory (tenant) ID from Part Two"
+    NoEcho: True
+
+  MSGraphUserId:
+    Type: String
+    Description: "The Microsoft Graph user id from Part Three"
+    NoEcho: True
+
+  #############################
+  ## AWS Required Parameters
+  #############################
+  
+  VPCCidrBlocks:
+    Type: String
+    Description: "The VPC Cidr block to use"
+    Default: 10.0.0.0/16
+
+  Subnet1Region:
+    Type: String
+    Description: "The subnets to use"
+    Default: "us-east-1a"
+
+  Subnet2Region:
+    Type: String
+    Description: "The subnets to use"
+    Default: "us-east-1b"
+  
+  SubnetPublicCidrBlocks1:
+    Type: String
+    Description: "The Public Subnet Cidr block to use"
+    Default: 10.0.0.0/24
+
+  SubnetPublicCidrBlocks2:
+    Type: String
+    Description: "The Public Subnet Cidr block to use"
+    Default: 10.0.1.0/24
+
+  SubnetPrivateCidrBlocks1:
+    Type: String
+    Description: "The First Private Subnet Cidr block to use"
+    Default: 10.0.2.0/24
+
+  SubnetPrivateCidrBlocks2:
+    Type: String
+    Description: "The Second Private Subnet Cidr block to use"
+    Default: 10.0.3.0/24
+  
+  SNSTopic:
+    Type: String
+    Description: "The SNS topic ARN from Part Four to send the webhook data to"
+
+  HostedZoneId:
+    Type: String
+    Description: "Hosted zone from Part Fourt for HTTPS domain to receive notications from Microsoft"
+
+  DNSName:
+    Type: String
+    Description: "Your AWS Route 53 registered domain name from Part One. Example: yourdomain.com"
+
+  SSLCertificateArn:
+    Type: String
+    Description: "The SSL Certificate ARN from Part Four. Needed for Load Balancer."
+
+  MainS3Bucket:
+    Type: String
+    Description: "The parent (top level, root) S3 bucket name for all environments from Part Four.
+
+  #############################
+  ## Project Parameters
+  #############################
+  EnvironUsed:
+    Type: String
+    Description: "The Environment"
+    Default: "dev"
+    AllowedValues:
+      - "dev"
+      - "test"
+      - "uat"
+      - "prod"
+  
+  #############################
+  ## AWS SQS Parameters
+  #############################
+
+  DelaySeconds:
+    Type: Number
+    Description: "The time in seconds that the delivery of all messages in the que is delayed. You can specify an integer value of 0 to 900 (15 minutes)"
+    Default: 5
+
+  MaximumMessageSize:
+    Type: Number
+    Description: "The limit of how many bytes that a message can contain before AWS SQS rejects it. 1024 bytes (1 KiB)  to 262144 bytes (256 KiB)"
+    Default: 262144
+
+  MessageRetentionPeriod:
+    Type: Number
+    Description: "The number of seconds that AWS SQS retains a message. You can specifiy an integer value from 60 seconds (1 minute) to 1209600 seconds (14) days"
+    Default: 1440
+
+  ReceiveMessageWaitTimeSeconds:
+    Type: Number
+    Description: "Specifies the duration, in seconds, that the ReceiveMessages action call waits until a message is in the queue in order to include it in a response, as opposed to returning any empty repsonse if a message is not yet available. 1 - 20"
+    Default: 0
+
+  VisibilityTimeout:
+    Type: Number
+    Description: "This should be longer than the time it would take to process and delete a message, this should not exceed 12 hours."
+    Default: 5
+
+Mappings:
+   Environments:
+      dev:
+        LambdaSourceMSGraphWebhookEmailS3Key: "dev/receiveNotification.zip"
+        LambdaSourceMSGraphRenewSubscriptionS3Key: "dev/renewSubscription.zip"
+        LambdaSourceMSGraphPullEmailDataS3Key: "dev/pullEmailData.zip"
+        LambdaSourceMSGraphRenewAccessTokenS3Key: "dev/renewAccessToken.zip"
+      test:
+        LambdaSourceMSGraphWebhookEmailS3Key: "test/receiveNotification.zip"
+        LambdaSourceMSGraphRenewSubscriptionS3Key: "test/renewSubscription.zip"
+        LambdaSourceMSGraphPullEmailDataS3Key: "test/pullEmailData.zip"
+        LambdaSourceMSGraphRenewAccessTokenS3Key: "test/renewAccessToken.zip"
+      uat:
+        LambdaSourceMSGraphWebhookEmailS3Key: "uat/receiveNotification.zip"
+        LambdaSourceMSGraphRenewSubscriptionS3Key: "uat/renewSubscription.zip"
+        LambdaSourceMSGraphPullEmailDataS3Key: "uat/pullEmailData.zip"
+        LambdaSourceMSGraphRenewAccessTokenS3Key: "uat/renewAccessToken.zip"
+      prod:
+        LambdaSourceMSGraphWebhookEmailS3Key: "prod/receiveNotification.zip"
+        LambdaSourceMSGraphRenewSubscriptionS3Key: "prod/renewSubscription.zip"
+        LambdaSourceMSGraphPullEmailDataS3Key: "prod/pullEmailData.zip"
+        LambdaSourceMSGraphRenewAccessTokenS3Key: "prod/renewAccessToken.zip"
+
+
+Resources:
+  #####################################
+  ## Create Network
+  #####################################
+  
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties: 
+      CidrBlock: !Ref VPCCidrBlocks
+      EnableDnsHostnames: "true"
+      EnableDnsSupport: "true"
+      Tags:
+        -
+          Key: "Name"
+          Value: "Emails VPC"
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    DependsOn: VPC
+    Properties:
+      VpcId:
+        Ref: VPC
+      CidrBlock: !Ref SubnetPublicCidrBlocks1
+      AvailabilityZone: !Ref Subnet1Region
+      MapPublicIpOnLaunch: true
+      Tags:
+        -
+          Key: "Name"
+          Value: "Emails Public Subnet 1"
+        -
+          Key: "Environment"
+          Value: !Ref EnvironUsed
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    DependsOn: VPC
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref SubnetPublicCidrBlocks2
+      AvailabilityZone: !Ref Subnet2Region
+      MapPublicIpOnLaunch: true
+      Tags:
+        -
+          Key: "Name"
+          Value: "Emails Public Subnet 2"
+        -
+          Key: "Environment"
+          Value: !Ref EnvironUsed
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    DependsOn: VPC
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref SubnetPrivateCidrBlocks1
+      AvailabilityZone: !Ref Subnet1Region
+      MapPublicIpOnLaunch: false
+      Tags:
+        -
+          Key: "Name"
+          Value: "Emails Private Subnet 1"
+        -
+          Key: "Environment"
+          Value: !Ref EnvironUsed
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    DependsOn: VPC
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref SubnetPrivateCidrBlocks2
+      AvailabilityZone: !Ref Subnet2Region
+      MapPublicIpOnLaunch: false
+      Tags:
+        -
+          Key: "Name"
+          Value: "Emails Private Subnet 2"
+        -
+          Key: "Environment"
+          Value: !Ref EnvironUsed   
+
+  ####### Create Internet Gateway for VPC #######
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    DependsOn: VPC
+    Properties:
+      VpcId: !Ref VPC
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        -
+          Key: "Name"
+          Value: "Emails Internet Gateway"
+        -
+          Key: "Environment"
+          Value: !Ref EnvironUsed
+
+  GatewayAttachmentVPC:
+    Type: AWS::EC2::VPCGatewayAttachment
+    DependsOn:
+    - VPC
+    - InternetGateway
+    Properties:
+      VpcId:
+        Ref: VPC
+      InternetGatewayId:
+        Ref: InternetGateway
+
+  ####### Create Public Subnet Gateways #######
+
+  ## FIRST Public Subnet Gateway
+  RouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn: 
+    - PublicSubnet1
+    - PublicRouteTable
+    Properties:
+      RouteTableId: 
+        Ref: PublicRouteTable
+      SubnetId:
+        Ref: PublicSubnet1
+
+  Route1:
+    Type: AWS::EC2::Route
+    DependsOn: 
+    - InternetGateway
+    - PublicRouteTable
+    Properties:
+      RouteTableId:
+        Ref: PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId:
+        Ref: InternetGateway
+
+  ####### SECOND Public Subnet Gateway ######
+
+  RouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn: 
+    - PublicSubnet2
+    - PublicRouteTable
+    Properties:
+      RouteTableId: 
+        Ref: PublicRouteTable
+      SubnetId:
+        Ref: PublicSubnet2
+
+  # Route2:
+  #   Type: AWS::EC2::Route
+  #   DependsOn: 
+  #   - InternetGateway
+  #   - PublicRouteTable
+  #   Properties:
+  #     RouteTableId:
+  #       Ref: PublicRouteTable
+  #     DestinationCidrBlock: 0.0.0.0/0
+  #     GatewayId:
+  #       Ref: InternetGateway
+
+  ###### Create NAT for Private Subnets to access Internet ######
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    DependsOn: VPC
+    Properties:
+      VpcId: 
+        Ref: VPC
+
+  PrivateRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn: 
+    - PrivateSubnet1
+    - PrivateRouteTable
+    Properties:
+      RouteTableId: 
+        Ref: PrivateRouteTable
+      SubnetId:
+        Ref: PrivateSubnet1
+
+  PrivateRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    DependsOn: 
+    - PrivateSubnet2
+    - PrivateRouteTable
+    Properties:
+      RouteTableId: 
+        Ref: PrivateRouteTable
+      SubnetId:
+        Ref: PrivateSubnet2  
+      
+  ElasticIP:
+    Type: AWS::EC2::EIP
+    DependsOn:
+    - GatewayAttachmentVPC
+    Properties:
+      Domain: !Ref VPC
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    DependsOn:
+    - ElasticIP
+    Properties:
+      AllocationId:
+        Fn::GetAtt:
+          - ElasticIP
+          - AllocationId
+      SubnetId:
+        Ref: PublicSubnet1
+
+  RouteNatGateway:
+   Type: AWS::EC2::Route
+   DependsOn:
+   - ElasticIP
+   - NatGateway
+   Properties:
+    DestinationCidrBlock: 0.0.0.0/0
+    RouteTableId:
+      Ref: PrivateRouteTable
+    NatGatewayId:
+      Ref: NatGateway
+
+
+  #####################################
+  ## Create Security Groups
+  #####################################
+
+  #Load Balancer Security Group
+  LbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: Security group for elastic load balancer
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        -
+          IpProtocol: "tcp"
+          FromPort: 80
+          ToPort: 80
+          CidrIp: "0.0.0.0/0"
+        -
+          IpProtocol: "tcp"
+          FromPort: 443
+          ToPort: 443
+          CidrIp: "0.0.0.0/0"  
+      Tags:
+        -
+          Key: "Name"
+          Value: "Email Lb Security Group"
+        -
+          Key: "Environment"
+          Value: !Ref EnvironUsed
+  
+  #Lambda Security Group
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties: 
+      GroupDescription: Security group for Lambdas
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        -
+          IpProtocol: "tcp"
+          FromPort: 443
+          ToPort: 443
+          CidrIp: "0.0.0.0/0"  
+      Tags:
+        -
+          Key: "Name"
+          Value: "Email Lambda Security Group"
+        -
+          Key: "Environment"
+          Value: !Ref EnvironUsed
+
+  # VPC Endpoint Security Group
+  VpcEndpointSecurityGroup:
+      Type: 'AWS::EC2::SecurityGroup'
+      Properties:
+        VpcId: !Ref VPC
+        GroupDescription: 'Security group for VPC Endpoint'
+        SecurityGroupIngress:
+          - IpProtocol: tcp
+            FromPort: 443
+            ToPort: 443
+            CidrIp: "0.0.0.0/0" 
+            
+        Tags:
+          -
+            Key: "Name"
+            Value: "Email VPN Endpoint Security Group"
+          -
+            Key: "Environment"
+            Value: !Ref EnvironUsed
+
+  #####################################
+  ## Create AWS Endpoints
+  #####################################   
+  
+  #Create endpoint for CloudWatch Logs
+  CloudWatchLogsVpcPrivateEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PrivateDnsEnabled: 'true'
+      VpcEndpointType: Interface
+      VpcId: !Ref VPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.logs
+      SecurityGroupIds: 
+        - !GetAtt VpcEndpointSecurityGroup.GroupId
+      SubnetIds:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+  
+  #Create endpoint for SNS
+  SNSVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    DependsOn:
+    - VPC
+    Properties:
+      PrivateDnsEnabled: 'true'
+      VpcEndpointType: Interface
+      VpcId: !Ref VPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.sns
+      SecurityGroupIds: 
+        - !GetAtt VpcEndpointSecurityGroup.GroupId
+      SubnetIds:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+  
+  #Create endpoint for SSM
+  SSMVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    DependsOn:
+    - VPC
+    Properties:
+      PrivateDnsEnabled: 'true'
+      VpcEndpointType: Interface
+      VpcId: !Ref VPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ssm
+      SecurityGroupIds: 
+        - !GetAtt VpcEndpointSecurityGroup.GroupId
+      SubnetIds:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+
+
+  #####################################
+  ## Create SSM Parameters
+  ##################################### 
+  MSGraphClientIdSSM:
+    Type: AWS::SSM::Parameter
+    Properties:
+      DataType: text
+      Description: The parameter store to save the MS Graph email Application (client) ID
+      Name: "MSGraphClientId"
+      Tier: "Standard"
+      Type: "String"
+      Value: !Ref MsGraphClientId
+
+  MSGraphTenantIdSSM:
+    Type: AWS::SSM::Parameter
+    Properties:
+      DataType: text
+      Description: The parameter store to the MS Graph Directory (tenant) ID
+      Name: "MSGraphTenantId"
+      Tier: "Standard"
+      Type: "String"
+      Value: !Ref MSGraphTenantId
+
+  MSGraphUserIdSSM:
+    Type: AWS::SSM::Parameter
+    Properties:
+      DataType: text
+      Description: The parameter store to the MS Graph User Id
+      Name: "MSGraphUserId"
+      Tier: "Standard"
+      Type: "String"
+      Value: !Ref MSGraphUserId
+    
+  SNSTopicSSM:
+    Type: AWS::SSM::Parameter
+    Properties:
+      DataType: text
+      Description: The parameter store to save the SNS Topic ARN
+      Name: "EmailSNSTopic"
+      Tier: "Standard"
+      Type: "String"
+      Value: !Ref SNSTopic
+  
+  #####################################
+  ## Create Dynamo Database
+  ##################################### 
+  TransactionTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: "Emails" # This table name is used in Lambdas.
+      AttributeDefinitions:
+        - 
+          AttributeName: "guid"
+          AttributeType: "S"
+        -
+          AttributeName: "id"
+          AttributeType: "S"     
+      BillingMode: "PAY_PER_REQUEST"
+      KeySchema:
+        - 
+          AttributeName: "guid"
+          KeyType: "HASH"
+        -
+          AttributeName: "id"
+          KeyType: "RANGE"
+      Tags:
+        -
+          Key: "Name"
+          Value: "Email DynamoDB"
+        -
+          Key: "Environment"
+          Value: !Ref EnvironUsed
+  
+  
+  #####################################
+  ## Create Lambdas
+  #####################################
+
+  #Create Lambda Roles
+  LambdaExecutionRole:
+    Type: "AWS::IAM::Role"
+    DependsOn:
+    - TransactionTable
+    Properties:
+      RoleName:
+          Fn::Join: ["-", ["EmailsLambda-Role", Ref: EnvironUsed]]
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: "sts:AssumeRole"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMFullAccess
+      Policies:
+        - PolicyName:
+            Fn::Join: ["-",["EmailsLambdaRolePolicy", Ref: EnvironUsed]]
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: "LambdaLogPermission"
+                Effect: "Allow"
+                Action: ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+                Resource: "*"
+              - Sid: "ec2VPCPermissions"
+                Effect: "Allow"
+                Action: [
+                  "ec2:DescribeNetworkInterfaces",
+                  "ec2:CreateNetworkInterface",
+                  "ec2:DeleteNetworkInterface",
+                  "ec2:DescribeInstances",
+                  "ec2:AttachNetworkInterface",
+                  "ec2:AssignPrivateIpAddresses",
+                  "ec2:UnassignPrivateIpAddresses"
+                  ]
+                Resource: "*"
+              - Sid: "secretsmanagerpermission"
+                Effect: "Allow"
+                Action: ["secretsmanager:GetSecretValue"]
+                Resource: [Fn::Join: ["", ["arn:aws:secretsmanager:", Ref: "AWS::Region", ":", Ref: "AWS::AccountId",":secret:*"]]]
+              - Sid: "s3permission"
+                Effect: "Allow"
+                Action: ["s3:Put*","s3:Get*","s3:List*","s3:DeleteObj*"]
+                Resource: "*"
+              - Sid: "AllowStepFunctionsInvocation"
+                Effect: "Allow"
+                Action: ["states:StartExecution", "states:GetExecutionHistory", "states:ListExecutions"]
+                Resource: "*"
+              - Sid: "lambdaSQSPermission"
+                Effect: "Allow"
+                Action: [
+                    "sqs:ReceiveMessage",
+                    "sqs:DeleteMessage", 
+                    "sqs:GetQueueAttributes",
+                    "sqs:SendMessage"
+                    ]
+                Resource: "*"
+              - Sid: "lambdaSNSPermission"
+                Effect: "Allow"
+                Action: [sns:Publish]
+                Resource: "*"  
+              - Sid: "lambdaDynamoDBPermission"
+                Effect: "Allow"
+                Action: [
+                    "dynamodb:BatchGetItem",
+                    "dynamodb:DescribeTable",
+                    "dynamodb:GetItem",
+                    "dynamodb:Query",
+                    "dynamodb:Scan",
+                    "dynamodb:BatchWriteItem",
+                    "dynamodb:UpdateItem",
+                    "dynamodb:PutItem",
+                    "dynamodb:DeleteItem"
+                    ]
+                Resource: !GetAtt [TransactionTable, Arn ]            
+
+      Tags:
+        -
+          Key: "Name"
+          Value: "Scientific Email Lambda Webhook Execution Role"
+        -
+          Key: "Environment"
+          Value: !Ref EnvironUsed
+  
+  # Microsoft Graph Webhook to create subscription and receive notifications Lambda
+  LambdaMSGraphWebhookEmail:
+    Type: "AWS::Lambda::Function"
+    DependsOn:
+    - LambdaExecutionRole
+    - LambdaSecurityGroup
+    - PublicSubnet1
+    - PublicSubnet2
+    Properties:
+      Description: "A webhook to begin a subscription and receive notifcations from MS Graph"
+      PackageType: "Zip"
+      Handler: lambda_function.lambda_handler
+      Runtime: "python3.8"
+      Timeout: "3"
+      MemorySize: 128
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PublicSubnet1
+          - !Ref PublicSubnet2
+      Role: !GetAtt [ LambdaExecutionRole, Arn ]
+      FunctionName:
+        Fn::Join: ["-", ["Emails-MSGraphWebhookEmail", Ref: EnvironUsed]]
+      Code:
+        S3Bucket: !Ref MainS3Bucket
+        S3Key:
+          Fn::FindInMap: [Environments, Ref: EnvironUsed, LambdaSourceMSGraphWebhookEmailS3Key] 
+      Tags:
+        -
+          Key: "Name"
+          Value: "Email Lambda Webhook"
+        -
+          Key: "Environment"
+          Value: !Ref EnvironUsed
+                   
+
+# Renew Microsoft Notification Subscription Lambda
+  LambdaMSGraphRenewSubscription:
+    Type: "AWS::Lambda::Function"
+    DependsOn:
+    - LambdaExecutionRole
+    - LambdaSecurityGroup
+    - PrivateSubnet1
+    - PrivateSubnet2
+    Properties:
+      Description: "A lambda to renew a Microsoft Graph subscription notification"
+      PackageType: "Zip"
+      Handler: "lambda_function.lambda_handler"
+      Role: !GetAtt [ LambdaExecutionRole, Arn ] 
+      FunctionName:
+        Fn::Join: ["-", ["Emails-MSGraphRenewSubscription", Ref: EnvironUsed]]
+      Code:
+        S3Bucket: !Ref MainS3Bucket
+        S3Key:
+          Fn::FindInMap: [Environments, Ref: EnvironUsed, LambdaSourceMSGraphRenewSubscriptionS3Key] 
+      Runtime: "python3.8"
+      Timeout: "3"
+      MemorySize: 128
+      #Layers:
+        #- !Sub "arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension:14"
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+      Tags:
+        -
+          Key: "Name"
+          Value: "Email Lambda Renew Subscription"
+        -
+          Key: "Environment"
+          Value: !Ref EnvironUsed
+
+# Pull Microsoft Notification Email Data Lambda
+  LambdaMSGraphPullEmailData:
+    Type: "AWS::Lambda::Function"
+    DependsOn:
+    - LambdaExecutionRole
+    - LambdaSecurityGroup
+    - PrivateSubnet1
+    - PrivateSubnet2
+    Properties:
+      Description: "A lambda to pull Microsoft Graph email data"
+      PackageType: "Zip"
+      Handler: "lambda_function.lambda_handler"
+      Role: !GetAtt [ LambdaExecutionRole, Arn ] 
+      FunctionName:
+        Fn::Join: ["-", ["Emails-MSGraphPullEmailData", Ref: EnvironUsed]]
+      Code:
+        S3Bucket: !Ref MainS3Bucket
+        S3Key:
+          Fn::FindInMap: [Environments, Ref: EnvironUsed, LambdaSourceMSGraphPullEmailDataS3Key] 
+      Runtime: "python3.8"
+      Timeout: "3"
+      MemorySize: 128
+      #Layers:
+        #- !Sub "arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension:14"
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+      Tags:
+        -
+          Key: "Name"
+          Value: "Email Lambda Pull Data"
+        -
+          Key: "Environment"
+          Value: !Ref EnvironUsed
+
+# Renew Microsoft Graph Access Token
+  LambdaMSGraphRenewAccessToken:
+    Type: "AWS::Lambda::Function"
+    DependsOn:
+    - LambdaExecutionRole
+    - LambdaSecurityGroup
+    - PrivateSubnet1
+    - PrivateSubnet2
+    Properties:
+      Description: "A lambda to renew the Microsoft Graph's access token"
+      PackageType: "Zip"
+      Handler: "lambda_function.lambda_handler"
+      Role: !GetAtt [ LambdaExecutionRole, Arn ] 
+      FunctionName:
+        Fn::Join: ["-", ["Emails-MSGraphRenewAccessToken", Ref: EnvironUsed]]
+      Code:
+        S3Bucket: !Ref MainS3Bucket
+        S3Key:
+          Fn::FindInMap: [Environments, Ref: EnvironUsed, LambdaSourceMSGraphRenewAccessTokenS3Key] 
+      Runtime: "python3.8"
+      Timeout: "3"
+      MemorySize: 128
+      #Layers:
+        #- !Sub "arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension:14"
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+      Tags:
+        -
+          Key: "Name"
+          Value: "Email Lambda Renew Access Token"
+        -
+          Key: "Environment"
+          Value: !Ref EnvironUsed
+  #####################################
+  ## Create Application Loadbalancer
+  #####################################
+
+  # Note: This assumes you have DNS record and an SSL Certificate created already. 
+  
+  #Create Application Loadbalancer
+  ApplicationLoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: 
+    - LbSecurityGroup
+    - PublicSubnet1
+    - PublicSubnet2
+    Properties:
+      Type: "application"
+      IpAddressType: "ipv4"
+      Name: "LbMsGraph2"
+      Scheme: "internet-facing"
+      SecurityGroups: 
+        - !Ref LbSecurityGroup
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      LoadBalancerAttributes: 
+              - 
+                Key: "access_logs.s3.enabled"
+                Value: "false"
+              - 
+                Key: "idle_timeout.timeout_seconds"
+                Value: "60"
+              - 
+                Key: "deletion_protection.enabled"
+                Value: "false"
+              - 
+                Key: "routing.http2.enabled"
+                Value: "true"
+              - 
+                Key: "routing.http.drop_invalid_header_fields.enabled"
+                Value: "false"
+      Tags:
+        -
+          Key: "Name"
+          Value: "Email Application Loadbalancer"
+        -
+          Key: "Environment"
+          Value: !Ref EnvironUsed
+
+  DNSRecord:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId:
+        Ref: HostedZoneId
+      Name:
+        Ref: DNSName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt ApplicationLoadBalancer.DNSName
+        HostedZoneId: !GetAtt ApplicationLoadBalancer.CanonicalHostedZoneID
+      
+
+  HTTPSListener:
+    DependsOn:
+    - ApplicationLoadBalancer
+    - LambdaWebHookTargetGroup
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 443
+      Protocol: "HTTPS"
+      SslPolicy: "ELBSecurityPolicy-2016-08"
+      Certificates: 
+        - 
+          CertificateArn: !Ref SSLCertificateArn
+      DefaultActions: 
+        - 
+          Order: 1
+          TargetGroupArn: !Ref LambdaWebHookTargetGroup
+          Type: "forward"
+
+  HTTPListener:
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    DependsOn:
+    - ApplicationLoadBalancer
+    Properties:
+      LoadBalancerArn: !Ref ApplicationLoadBalancer
+      Port: 80
+      Protocol: "HTTP"
+      DefaultActions:
+        -
+          Order: 1
+          RedirectConfig:
+            Protocol: "HTTPS"
+            Port: "443"
+            Host: "#{host}"
+            Path: "/#{path}"
+            Query: "#{query}"
+            StatusCode: "HTTP_301"
+          Type: "redirect"
+  
+  LambdaFunctionPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+    - LambdaMSGraphWebhookEmail
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt [LambdaMSGraphWebhookEmail, Arn]
+      Principal: elasticloadbalancing.amazonaws.com
+  
+  LambdaWebHookTargetGroup:
+    Type: "AWS::ElasticLoadBalancingV2::TargetGroup"
+    DependsOn:
+    - LambdaMSGraphWebhookEmail
+    Properties:
+      HealthCheckEnabled: "true" #can turn off to save money
+      Name: "lambdawebhook"
+      TargetType: lambda
+      Targets:
+        - Id: !GetAtt [LambdaMSGraphWebhookEmail, Arn]
+      Tags:
+        -
+          Key: "Name"
+          Value: "Email ELB Target Group"
+        -
+          Key: "Environment"
+          Value: !Ref EnvironUsed
+
+  #####################################
+  ## Create SQS
+  #####################################
+  
+  webhookSQS:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: "EmailsMicrosoftGraphNotifications"
+      DelaySeconds: !Ref DelaySeconds
+      #FifoQueue: "true"
+      MaximumMessageSize: !Ref MaximumMessageSize
+      MessageRetentionPeriod: !Ref MessageRetentionPeriod
+      ReceiveMessageWaitTimeSeconds: !Ref ReceiveMessageWaitTimeSeconds
+      VisibilityTimeout: !Ref VisibilityTimeout
+      Tags:
+        -
+          Key: "Name"
+          Value: "Scientific Email Webhook SQS"
+        -
+          Key: "Environment"
+          Value: !Ref EnvironUsed
+
+  webhookSQSSubscription:
+    Type: 'AWS::SNS::Subscription'
+    DependsOn:
+    - webhookSQS
+    Properties:
+      TopicArn: !Ref SNSTopic
+      Endpoint: !GetAtt [webhookSQS, Arn]
+      Protocol: sqs
+      RawMessageDelivery: 'true'
+
+  SQSPolicy:
+    Type: AWS::SQS::QueuePolicy
+    DependsOn:
+    - webhookSQS
+    Properties:
+      Queues: 
+        - !Ref webhookSQS
+      PolicyDocument:
+        Statement:
+          -
+            Sid: "MySQSPolicy"
+            Effect: "Allow"
+            Principal:
+              AWS: "*"
+            Action:
+              - "SQS:SendMessage"
+              - "SQS:ReceiveMessage"
+            Resource: !GetAtt [webhookSQS, Arn]
+            Condition:
+              ArnLike: 
+                aws:SourceArn: !Ref SNSTopic
+
+
+  #####################################
+  ## Create Cloudwatch Rules
+  #####################################
+  
+  ###The Rules###
+
+  # Renew the Microsoft Graph Subscription Notification Rule (once a day)
+  renewMSGraph:
+    Type: AWS::Events::Rule
+    DependsOn:
+    - LambdaMSGraphRenewSubscription
+    Properties:
+      Description: "A rule to renew the MS Graph subscription to an outlook inbox"
+      Name: "EmailsRenewMSGraphRule"
+      State: ENABLED
+      ScheduleExpression: "rate(1 day)"
+      Targets: 
+        - 
+          Arn: !GetAtt [LambdaMSGraphRenewSubscription, Arn]
+          Id: "LambdaMSGraphRenewSubscription"
+
+  renewMSGraphAccess:
+    Type: AWS::Events::Rule
+    DependsOn:
+    - LambdaMSGraphRenewAccessToken
+    Properties:
+      Description: "A rule to renew access to MS Graph"
+      Name: "EmailsRenewMSGraphAccess"
+      State: ENABLED
+      ScheduleExpression: "rate(30 minutes)"
+      Targets:
+        - 
+          Arn: !GetAtt [LambdaMSGraphRenewAccessToken, Arn]
+          Id: "LambdaMSGraphRenewAccessToken"   
+  
+  #####The Permissions to invoke the rules####
+
+  PermissionForEventsToInvokeMSGraphRenewSubscription:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+    - renewMSGraph
+    - LambdaMSGraphRenewSubscription
+    Properties: 
+      FunctionName: !Ref LambdaMSGraphRenewSubscription
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: !GetAtt [renewMSGraph, Arn]
+  
+  PermissionForEventsToInvokeLambdaMSGraphRenewAccess:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+    - renewMSGraphAccess
+    - LambdaMSGraphRenewAccessToken
+    Properties: 
+      FunctionName: !Ref LambdaMSGraphRenewAccessToken
+      Action: "lambda:InvokeFunction"
+      Principal: "events.amazonaws.com"
+      SourceArn: !GetAtt [renewMSGraphAccess, Arn]
+
+  #####################################
+  ## Create Triggers and Destinations
+  #####################################
+
+  SQSLambdaTrigger:
+    Type: "AWS::Lambda::EventSourceMapping"
+    DependsOn: 
+    - webhookSQS
+    - LambdaMSGraphPullEmailData
+    Properties: 
+      BatchSize: 10
+      EventSourceArn: !GetAtt [webhookSQS, "Arn"]
+      FunctionName: !GetAtt [LambdaMSGraphPullEmailData, "Arn"]
+
+  
+
+      
+
+
+
+    
