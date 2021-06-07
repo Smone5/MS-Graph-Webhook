@@ -1,0 +1,17 @@
+Below is the list of items you need to gather in order to run the AWS CloudFormation script to deploy
+
+Microsoft
+    App Client Id: 
+    App Tenant Id: 
+    App Secret: 
+    User Id for Inbox Owner: 
+    SecretClientState: 
+
+AWS
+    Main (Parent) S3 Bucket Name:
+    Hosted Zone Id:
+    DNS Name:
+    SSL Certificate ARN:
+    Simple Notification Service (SNS) Topic ARN:
+    HostedZone: 
+    Domain:
